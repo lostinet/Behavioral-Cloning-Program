@@ -11,7 +11,6 @@ from keras.models import Sequential
 from keras.layers import Flatten,Dense,Lambda,Dropout
 from keras.layers.convolutional import Convolution2D,Cropping2D, MaxPooling2D
 from keras.callbacks import ModelCheckpoint
-from keras.backend import tf as ktf
 from keras.utils.visualize_util import plot
 
 
@@ -26,8 +25,8 @@ with open(file_dic + "driving_log.csv") as csvfile:
 
 
 # only used for debug.
-#samples = []
-#for sample in lines:
+# samples = []
+# for sample in lines:
 #        samples.append(sample)
 
 
@@ -126,7 +125,6 @@ def generator(samples, batch_size=32):
                     angles.append(flipped_angle)
         
 #        shuffle the output
-
             X_train = np.array(images)
             y_train = np.array(angles)
             yield shuffle(X_train,y_train)
@@ -187,7 +185,7 @@ checkpointer = ModelCheckpoint(filepath='model.h5', verbose=1, save_best_only=Tr
 
 # implement the training process.validate the dataset loss.
 history = model.fit_generator(generator(train_samples, batch_size=32), samples_per_epoch = (len(train_samples)//192)*192*6,
-                     nb_epoch=10,validation_data=generator(validation_samples, batch_size=32), nb_val_samples=len(validation_samples)*6)
+                     nb_epoch=10,validation_data=generator(validation_samples, batch_size=32), nb_val_samples=len(validation_samples)*6,verbose=0, callbacks=[checkpointer])
 
 # Plot cost history
 plt.plot(history.history['loss'])
