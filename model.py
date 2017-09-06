@@ -11,6 +11,8 @@ from keras.models import Sequential
 from keras.layers import Flatten,Dense,Lambda,Dropout
 from keras.layers.convolutional import Convolution2D,Cropping2D, MaxPooling2D
 from keras.callbacks import ModelCheckpoint
+from keras.backend import tf as ktf
+from keras.utils.visualize_util import plot
 
 
 
@@ -31,6 +33,23 @@ with open(file_dic + "driving_log.csv") as csvfile:
 
 
 
+# steering angle hist gram before filtering
+angles = []
+samples = []
+center_counter = 0
+for sample in lines:
+    center_value = float(sample[3])
+    angles.append(center_value)
+    samples.append(sample)
+
+plt.hist(angles)
+plt.title("Steering angles Histogram before filtering")
+plt.xlabel("Value")
+plt.ylabel("Frequency")
+plt.gcf()
+plt.show()
+
+
 # remove redundancy data, ensures recovery data
 angles = []
 samples = []
@@ -49,13 +68,13 @@ for sample in lines:
             center_counter = 0
         center_counter += 1
 
-## Plot distribution of samples steering initial angles after prefiltering central angle samples
-#plt.hist(samples)
-#plt.title("Steering angles Histogram after filtering")
-#plt.xlabel("Value")
-#plt.ylabel("Frequency")
-#plt.gcf()
-#plt.show()
+# steering angle hist gram after filtering
+plt.hist(angles)
+plt.title("Steering angles Histogram after filtering")
+plt.xlabel("Value")
+plt.ylabel("Frequency")
+plt.gcf()
+plt.show()
 
 # split the train set and validation set
 train_samples, validation_samples = train_test_split(samples, test_size=0.2)
@@ -88,8 +107,6 @@ def generator(samples, batch_size=32):
                     image = cv2.imread(image_path)
 #                    transforming colorspace
                     image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
-                    image = image[70:140,10:310]
-                    image = cv2.resize(image,(24,24))
                     images.append(image)
 #                    flip the image to augment the samples
                     images.append(cv2.flip(image, 1))
@@ -114,20 +131,27 @@ def generator(samples, batch_size=32):
             y_train = np.array(angles)
             yield shuffle(X_train,y_train)
 
+def my_resize_function(images):
+    from keras.backend import tf as ktf
+    return ktf.image.resize_images(images,(24,24))
+
+
 model = Sequential()
 
-# input image size trial and error
-#row,col,ch = 80,160,3
-#row,col,ch = 70,300,3
-#row,col,ch = 35,150,3
-#row, col, ch = 60,60,3
-#row,col,ch = 30,30,3
-row,col,ch = 24,24,3
+# input image size
+
+row,col,ch = 160,320,3
+input_shape = (row,col,ch)
 
 
 # Create NVIDIA Dave2 covnet with keras
+# Cropping
+model.add(Cropping2D(cropping=((70,20),(10,10)),input_shape = input_shape))
+# Resizing
+#model.add(Lambda(lambda x: ktf.image.resize_images(x,(24,24))))
+model.add(Lambda(my_resize_function))
 # Normalization
-model.add(Lambda(lambda x: x/255 - 0.5,input_shape=(row, col, ch)))
+model.add(Lambda(lambda x: x/255 - 0.5))
 
 
 # Add 3 * 3x3 convolution layers (output depth 16, 32, and 64), each with ReLU and 2x2 maxpooling layer.
@@ -155,23 +179,26 @@ model.add(Dense(1))
 # Train Covnet
 model.compile(loss='mse', optimizer='adam')
 
+# Plot the covnet
+plot(model, to_file='model.png')
+
+# use checkpoint to save the weights
+checkpointer = ModelCheckpoint(filepath='model.h5', verbose=1, save_best_only=True)
 
 # implement the training process.validate the dataset loss.
 history = model.fit_generator(generator(train_samples, batch_size=32), samples_per_epoch = (len(train_samples)//192)*192*6,
-                     nb_epoch=20,validation_data=generator(validation_samples, batch_size=32), nb_val_samples=len(validation_samples)*6)
+                     nb_epoch=10,validation_data=generator(validation_samples, batch_size=32), nb_val_samples=len(validation_samples)*6)
 
-## Plot cost history
-#plt.plot(fit_history.history['loss'])
-#plt.plot(fit_history.history['val_loss'])
-#plt.title('model MSE loss')
-#plt.ylabel('MSE loss')
-#plt.xlabel('epoch')
-#plt.legend(['training set', 'validation set'], loc='upper right')
-#plt.show()
+# Plot cost history
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('model MSE loss')
+plt.ylabel('MSE loss')
+plt.xlabel('epoch')
+plt.legend(['training set', 'validation set'], loc='upper right')
+plt.show()
 
 
-# save the weights
-model.save('model.h5')
 print('Trained h5 model saved.')
 
 
